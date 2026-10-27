@@ -7,9 +7,16 @@ when credentials are unset or quota is exhausted.
 
 import json
 import logging
+import re
+import time
 from typing import Dict, Any, Optional, Tuple, List
 
-from config import get_gemini_api_key, DEFAULT_GEMINI_MODEL
+from config import (
+    get_gemini_api_key,
+    DEFAULT_GEMINI_MODEL,
+    SUPPORTED_GEMINI_MODELS,
+    FALLBACK_GEMINI_MODELS
+)
 from models.schemas import (
     EventInput,
     CreativeConcepts,
@@ -21,6 +28,133 @@ from models.schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def sanitize_api_message(text: str) -> str:
+    """Sanitize error messages or text to ensure raw API keys are never exposed."""
+    if not text:
+        return ""
+    # Redact Google API key patterns (e.g. AIzaSy...)
+    redacted = re.sub(r'AIza[0-9A-Za-z\-_]{16,}', '[REDACTED_API_KEY]', text)
+    redacted = re.sub(r'(?:key|token|api_key)=([0-9A-Za-z\-_]+)', r'key=[REDACTED]', redacted)
+    return redacted
+
+
+def classify_gemini_error(exc: Exception, model: str = "") -> Tuple[str, str]:
+    """Classify a Gemini API error into a structured category and safe user-friendly message.
+    
+    Guarantees no raw API key is exposed in the message.
+    """
+    err_str = sanitize_api_message(str(exc))
+    code = getattr(exc, "code", None)
+
+    # HTTP 503 / High demand / Overloaded / Service Unavailable
+    if code == 503 or "503" in err_str or "high demand" in err_str.lower() or "overloaded" in err_str.lower() or "unavailable" in err_str.lower():
+        return (
+            "TEMPORARY_UNAVAILABLE",
+            f"Gemini model '{model}' is currently experiencing high demand (HTTP 503). Spikes in demand are usually temporary."
+        )
+
+    # HTTP 429 / Rate limited / Quota exhausted
+    if code == 429 or "429" in err_str or "resource_exhausted" in err_str.lower() or "quota" in err_str.lower():
+        return (
+            "RATE_LIMITED",
+            "Gemini API rate limit or quota exceeded (HTTP 429). Please wait a moment before trying again."
+        )
+
+    # HTTP 400 / 403 / Invalid key / Permission denied
+    if code in (400, 403) or "api_key_invalid" in err_str.lower() or "api key not valid" in err_str.lower() or "permission_denied" in err_str.lower():
+        return (
+            "INVALID_KEY",
+            "The Gemini API key was rejected by Google AI Studio. Please verify that your key is copied correctly and has access enabled."
+        )
+
+    # HTTP 404 / Model not found / Unsupported
+    if code == 404 or "404" in err_str or "not_found" in err_str.lower() or "not found" in err_str.lower():
+        return (
+            "MODEL_NOT_FOUND",
+            f"Gemini model '{model}' was not found or is not enabled for your API key tier."
+        )
+
+    # HTTP 504 / Timeout / Deadline exceeded
+    if code == 504 or "deadline" in err_str.lower() or "timeout" in err_str.lower():
+        return (
+            "TIMEOUT",
+            f"The request timed out while communicating with Gemini model '{model}'."
+        )
+
+    return ("UNKNOWN", err_str)
+
+
+def get_candidate_models(primary_model: str) -> List[str]:
+    """Return an ordered list of candidate models starting with primary_model and adding fallbacks."""
+    candidates = [primary_model]
+    for fb in FALLBACK_GEMINI_MODELS:
+        if fb not in candidates:
+            candidates.append(fb)
+    return candidates
+
+
+def _call_gemini_with_retry_and_fallback(
+    client,
+    contents: str,
+    primary_model: str,
+    response_mime_type: Optional[str] = None,
+    temperature: float = 0.6,
+    max_retries_per_model: int = 1,
+) -> Tuple[str, str, bool]:
+    """Execute Gemini request with bounded retries on 503/timeout and model fallback.
+    
+    Returns:
+        (response_text, model_used, fallback_used)
+    Raises:
+        Exception if all candidates fail.
+    """
+    from google.genai import types
+
+    candidates = get_candidate_models(primary_model)
+    last_exception = None
+
+    for idx, attempt_model in enumerate(candidates):
+        is_primary = (idx == 0)
+        retries = max_retries_per_model if is_primary else 0
+
+        for attempt in range(retries + 1):
+            try:
+                config_kwargs = {"temperature": temperature}
+                if response_mime_type:
+                    config_kwargs["response_mime_type"] = response_mime_type
+
+                response = client.models.generate_content(
+                    model=attempt_model,
+                    contents=contents,
+                    config=types.GenerateContentConfig(**config_kwargs)
+                )
+
+                if response and response.text:
+                    return response.text, attempt_model, (attempt_model != primary_model)
+
+            except Exception as e:
+                last_exception = e
+                cat, msg = classify_gemini_error(e, attempt_model)
+                logger.warning(
+                    f"Gemini call on {attempt_model} (attempt {attempt + 1}) failed [{cat}]: {msg}"
+                )
+
+                if cat == "INVALID_KEY":
+                    # Hard failure, key is rejected; do not retry or cycle models
+                    raise e
+
+                if cat in ("TEMPORARY_UNAVAILABLE", "TIMEOUT") and attempt < retries:
+                    time.sleep(1.0)
+                    continue
+
+                # Fall back to next candidate model
+                break
+
+    if last_exception:
+        raise last_exception
+    raise RuntimeError("No candidate Gemini models responded successfully.")
 
 
 def _clean_json_text(text: str) -> Dict[str, Any]:
@@ -50,13 +184,130 @@ def is_gemini_available() -> Tuple[bool, str]:
         return False, "google-genai package is not installed."
 
 
-def get_gemini_client():
+def get_gemini_client(api_key: Optional[str] = None, timeout_ms: int = 12000):
     """Create and return configured genai.Client instance."""
-    key = get_gemini_api_key()
+    key = api_key or get_gemini_api_key()
     if not key:
         raise ValueError("Missing Gemini API Key.")
     from google import genai
-    return genai.Client(api_key=key)
+    from google.genai import types
+    return genai.Client(
+        api_key=key,
+        http_options=types.HttpOptions(timeout=timeout_ms)
+    )
+
+
+def verify_gemini_connection(
+    api_key: Optional[str] = None,
+    model_name: Optional[str] = None,
+    allow_fallback: bool = True,
+    max_retries: int = 1,
+) -> Dict[str, Any]:
+    """Test Gemini connection with bounded retries for 503s and optional model fallback.
+    
+    Returns structured results for Settings UI with error categorization and diagnostics.
+    Guarantees no raw API key is exposed in error messages.
+    """
+    key = (api_key or get_gemini_api_key() or "").strip()
+    if not key:
+        return {
+            "success": False,
+            "primary_model": model_name or DEFAULT_GEMINI_MODEL,
+            "model_used": None,
+            "fallback_used": False,
+            "response_text": None,
+            "error_category": "MISSING_KEY",
+            "error_message": "No API key was provided or configured.",
+            "diagnostic_trail": ["Check failed: GEMINI_API_KEY is empty."],
+        }
+
+    primary = model_name or DEFAULT_GEMINI_MODEL
+    candidates = get_candidate_models(primary) if allow_fallback else [primary]
+    diagnostic_trail: List[str] = []
+
+    try:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(
+            api_key=key,
+            http_options=types.HttpOptions(timeout=10000)
+        )
+    except Exception as e:
+        safe_err = sanitize_api_message(str(e))
+        return {
+            "success": False,
+            "primary_model": primary,
+            "model_used": None,
+            "fallback_used": False,
+            "response_text": None,
+            "error_category": "CLIENT_INIT_FAILED",
+            "error_message": safe_err,
+            "diagnostic_trail": [f"Client init error: {safe_err}"],
+        }
+
+    last_category = "UNKNOWN"
+    last_message = "Connection verification failed."
+
+    for idx, cand_model in enumerate(candidates):
+        is_primary = (idx == 0)
+        retries = max_retries if is_primary else 0
+
+        for attempt in range(retries + 1):
+            try:
+                response = client.models.generate_content(
+                    model=cand_model,
+                    contents="Say 'FESTIWISE_OK' if you can read this."
+                )
+                if response and response.text:
+                    resp_clean = response.text.strip()
+                    diagnostic_trail.append(f"Model '{cand_model}' (attempt {attempt + 1}): SUCCESS ({resp_clean})")
+                    return {
+                        "success": True,
+                        "primary_model": primary,
+                        "model_used": cand_model,
+                        "fallback_used": (cand_model != primary),
+                        "response_text": sanitize_api_message(resp_clean),
+                        "error_category": None,
+                        "error_message": None,
+                        "diagnostic_trail": diagnostic_trail,
+                    }
+            except Exception as exc:
+                cat, msg = classify_gemini_error(exc, cand_model)
+                last_category = cat
+                last_message = msg
+                diagnostic_trail.append(f"Model '{cand_model}' (attempt {attempt + 1}): {cat} - {msg}")
+
+                if cat == "INVALID_KEY":
+                    # Hard fail; invalid key won't work on other models either
+                    return {
+                        "success": False,
+                        "primary_model": primary,
+                        "model_used": None,
+                        "fallback_used": False,
+                        "response_text": None,
+                        "error_category": "INVALID_KEY",
+                        "error_message": msg,
+                        "diagnostic_trail": diagnostic_trail,
+                    }
+
+                if cat in ("TEMPORARY_UNAVAILABLE", "TIMEOUT") and attempt < retries:
+                    time.sleep(1.0)
+                    continue
+
+                # Fallback to next candidate
+                break
+
+    return {
+        "success": False,
+        "primary_model": primary,
+        "model_used": None,
+        "fallback_used": False,
+        "response_text": None,
+        "error_category": last_category,
+        "error_message": last_message,
+        "diagnostic_trail": diagnostic_trail,
+    }
 
 
 def generate_ai_event_blueprint(
@@ -128,37 +379,31 @@ def generate_ai_event_blueprint(
             }}
             """
 
-            candidate_models = [model]
-            if model != "gemini-3.5-flash-lite":
-                candidate_models.append("gemini-3.5-flash-lite")
+            resp_text, model_used, fallback_used = _call_gemini_with_retry_and_fallback(
+                client=client,
+                contents=prompt,
+                primary_model=model,
+                response_mime_type="application/json",
+                temperature=0.6,
+                max_retries_per_model=1,
+            )
 
-            for attempt_model in candidate_models:
-                try:
-                    response = client.models.generate_content(
-                        model=attempt_model,
-                        contents=prompt,
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            temperature=0.6,
-                        )
-                    )
-
-                    if response and response.text:
-                        data = _clean_json_text(response.text)
-                        return {
-                            "overview": data.get("overview", "Personalized event plan created by FestiWise AI."),
-                            "creative": CreativeConcepts(**data["creative"]),
-                            "day_schedule": [EventScheduleItem(**s) for s in data.get("day_schedule", [])],
-                            "vendor_guidance": [VendorCategoryGuidance(**g) for g in data.get("vendor_guidance", [])],
-                            "risks_and_contingencies": data.get("risks_and_contingencies", []),
-                            "assumptions": data.get("assumptions", []),
-                            "used_live_ai": True,
-                            "model_used": attempt_model,
-                        }
-                except Exception as model_err:
-                    logger.warning(f"Live Gemini API call failed on {attempt_model}: {model_err}. Trying fallback.")
+            if resp_text:
+                data = _clean_json_text(resp_text)
+                return {
+                    "overview": data.get("overview", "Personalized event plan created by FestiWise AI."),
+                    "creative": CreativeConcepts(**data["creative"]),
+                    "day_schedule": [EventScheduleItem(**s) for s in data.get("day_schedule", [])],
+                    "vendor_guidance": [VendorCategoryGuidance(**g) for g in data.get("vendor_guidance", [])],
+                    "risks_and_contingencies": data.get("risks_and_contingencies", []),
+                    "assumptions": data.get("assumptions", []),
+                    "used_live_ai": True,
+                    "model_used": model_used,
+                    "fallback_used": fallback_used,
+                }
         except Exception as e:
-            logger.warning(f"Live Gemini setup failed: {e}. Falling back to demo generator.")
+            cat, msg = classify_gemini_error(e, model)
+            logger.warning(f"Live Gemini blueprint generation failed [{cat}]: {msg}. Falling back to demo generator.")
 
     # Graceful demo fallback generator
     return _generate_demo_event_blueprint(event_input)
@@ -466,40 +711,33 @@ def generate_plan_rescue_advice(
             }}
             """
 
-            candidate_models = [model]
-            if model != "gemini-3.5-flash-lite":
-                candidate_models.append("gemini-3.5-flash-lite")
+            resp_text, model_used, fallback_used = _call_gemini_with_retry_and_fallback(
+                client=client,
+                contents=prompt,
+                primary_model=model,
+                response_mime_type="application/json",
+                temperature=0.5,
+                max_retries_per_model=1,
+            )
 
-            for attempt_model in candidate_models:
-                try:
-                    response = client.models.generate_content(
-                        model=attempt_model,
-                        contents=prompt,
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            temperature=0.5,
-                        )
-                    )
-
-                    if response and response.text:
-                        data = _clean_json_text(response.text)
-                        alternatives = [
-                            PlanRescueAlternative(**alt) for alt in data.get("recommended_alternatives", [])
-                        ]
-                        rec = PlanRescueRecommendation(
-                            disruption_summary=data.get("disruption_summary", "Disruption analysis complete."),
-                            quantitative_impact=budget_impact,
-                            affected_tasks=data.get("affected_tasks", []),
-                            affected_vendors=data.get("affected_vendors", []),
-                            recommended_alternatives=alternatives,
-                            contingency_steps=data.get("contingency_steps", []),
-                            rebalancing_strategy=data.get("rebalancing_strategy", ""),
-                        )
-                        return rec, True, attempt_model
-                except Exception as model_err:
-                    logger.warning(f"Plan rescue live API call failed on {attempt_model}: {model_err}. Trying fallback.")
+            if resp_text:
+                data = _clean_json_text(resp_text)
+                alternatives = [
+                    PlanRescueAlternative(**alt) for alt in data.get("recommended_alternatives", [])
+                ]
+                rec = PlanRescueRecommendation(
+                    disruption_summary=data.get("disruption_summary", "Disruption analysis complete."),
+                    quantitative_impact=budget_impact,
+                    affected_tasks=data.get("affected_tasks", []),
+                    affected_vendors=data.get("affected_vendors", []),
+                    recommended_alternatives=alternatives,
+                    contingency_steps=data.get("contingency_steps", []),
+                    rebalancing_strategy=data.get("rebalancing_strategy", ""),
+                )
+                return rec, True, model_used
         except Exception as e:
-            logger.warning(f"Plan rescue live API setup failed: {e}. Falling back to demo rescue engine.")
+            cat, msg = classify_gemini_error(e, model)
+            logger.warning(f"Plan rescue live API call failed [{cat}]: {msg}. Falling back to demo rescue engine.")
 
     # High quality demo rescue fallback
     return _generate_demo_rescue_advice(request, event_data, budget_impact)

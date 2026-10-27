@@ -57,7 +57,7 @@ Instead of treating event planning as static forms or disconnected chats, FestiW
 - **Programming Language:** Python 3.13 / 3.11+
 - **Web Application Framework:** [Streamlit](https://streamlit.io/) (v1.39+)
 - **Generative AI SDK:** [Google GenAI SDK (`google-genai`)](https://github.com/googleapis/python-genai) (v1.0+)
-- **Primary AI Models:** `gemini-3.8-flash` (Default), `gemini-3.5-flash-lite`, `gemini-4-argon`, `gemini-2.5-flash`
+- **Primary AI Models:** `gemini-3.6-flash` (Recommended), `gemini-3.8-flash`, `gemini-3.5-flash-lite`, `gemini-2.5-flash`
 - **Data Validation & Schemas:** [Pydantic v2](https://docs.pydantic.dev/)
 - **Data Persistence:** SQLite 3 with foreign key cascading and JSON serialization
 - **Visual Analytics:** [Plotly Express & Graph Objects](https://plotly.com/python/)
@@ -163,7 +163,7 @@ Open your browser and navigate to `http://localhost:8501`.
 
 ## 9. How to Run the Automated Test Suite
 
-FestiWise AI includes 21 comprehensive unit and integration tests covering data validation, programmatic budget arithmetic, database persistence, Plan Rescue calculations, full user lifecycle workflows, and GenAI error recovery:
+FestiWise AI includes 25 comprehensive unit and integration tests covering data validation, programmatic budget arithmetic, database persistence, Plan Rescue calculations, full user lifecycle workflows, and GenAI error recovery / model fallback:
 
 ```powershell
 pytest -v tests
@@ -231,7 +231,7 @@ FestiWise AI requires **zero paid cloud credits** and is specifically engineered
 - [x] **Guest & RSVP Management:** Attendee capacity tracker, dietary requirements, and group seating.
 - [x] **Settings & Diagnostics:** Live Gemini API test tool, model switcher, currency preferences.
 - [x] **Data Persistence:** Local SQLite database with full CRUD and cascade delete.
-- [x] **Automated Test Suite:** 21 passing unit & integration tests.
+- [x] **Automated Test Suite:** 25 passing unit & integration tests.
 
 ---
 

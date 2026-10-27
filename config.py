@@ -27,9 +27,14 @@ DATABASE_PATH = os.getenv("DATABASE_PATH", str(BASE_DIR / "festiwise.db"))
 DEFAULT_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 SUPPORTED_GEMINI_MODELS = [
     "gemini-3.8-flash",
+    "gemini-3.6-flash",
     "gemini-3.5-flash-lite",
-    "gemini-4-argon",
     "gemini-2.5-flash"
+]
+FALLBACK_GEMINI_MODELS = [
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.8-flash"
 ]
 
 # Supported Currencies & Symbols

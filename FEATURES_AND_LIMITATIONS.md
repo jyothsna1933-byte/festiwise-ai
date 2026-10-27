@@ -23,7 +23,7 @@
 | **Guest & RSVP Management** | Attendee headcount capacity vs. confirmed attendees, plus-ones, dietary tags, table groups | **VERIFIED** | Tested capacity surge alerts and guest status updates. |
 | **Database Persistence** | SQLite 3 relational schema with foreign key cascading and JSON serialization | **VERIFIED** | Full CRUD verified in `tests/test_db.py` on temporary database. |
 | **Settings & Diagnostics** | In-app API key verification tool, model selector, currency selector, and system info | **VERIFIED** | Tested API verification flow and session preference persistence. |
-| **Automated Testing Suite** | 21 automated unit & integration tests covering budget, schemas, timeline, SQLite, rescue, and Gemini | **VERIFIED** | 21 passed out of 21 tests in 3.66 seconds via pytest. |
+| **Automated Testing Suite** | 25 automated unit & integration tests covering budget, schemas, timeline, SQLite, rescue, and Gemini resilience | **VERIFIED** | 25 passed out of 25 tests via pytest. |
 
 ---
 
@@ -43,7 +43,10 @@
   - **Resolution:** Safely diagnosed via low-level `ctypes.windll.kernel32.LoadLibraryExW` diagnostic. Tested and installed the vetted official release `pandas==2.2.3`, which loaded completely without any security block. Pinned `pandas>=2.2.3,<3.0.0` in `requirements.txt`.
 - **Symptom 5:** Upstream Gemini model deprecations (`gemini-2.5-flash` returning 404).
   - **Root Cause:** Older preview models are periodically retired by Google AI Studio.
-  - **Resolution:** Updated `services/gemini_service.py` to auto-fallback across candidate models (`[configured_model, "gemini-3.5-flash-lite"]`). Verified live API connectivity with `gemini-3.5-flash-lite`.
+  - **Resolution:** Updated `services/gemini_service.py` to auto-fallback across candidate models (`[configured_model, "gemini-3.6-flash", "gemini-3.5-flash-lite"]`). Verified live API connectivity.
+- **Symptom 6:** Settings page returning HTTP 503 UNAVAILABLE when testing `gemini-3.8-flash`.
+  - **Root Cause:** `gemini-3.8-flash` experiences periodic high-traffic demand spikes on the free tier. Previously, verification treated any failure as an invalid key and lacked bounded retry or fallback.
+  - **Resolution:** Introduced `classify_gemini_error`, key sanitization regex, bounded retries (1-2 attempts) with backoff on 503/timeout, and automatic fallback to `gemini-3.6-flash` and `gemini-3.5-flash-lite`. Verified with live `FESTIWISE_OK` response.
 
 ---
 
