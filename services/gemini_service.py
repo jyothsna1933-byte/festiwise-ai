@@ -128,29 +128,37 @@ def generate_ai_event_blueprint(
             }}
             """
 
-            response = client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.6,
-                )
-            )
+            candidate_models = [model]
+            if model != "gemini-3.5-flash-lite":
+                candidate_models.append("gemini-3.5-flash-lite")
 
-            if response and response.text:
-                data = _clean_json_text(response.text)
-                return {
-                    "overview": data.get("overview", "Personalized event plan created by FestiWise AI."),
-                    "creative": CreativeConcepts(**data["creative"]),
-                    "day_schedule": [EventScheduleItem(**s) for s in data.get("day_schedule", [])],
-                    "vendor_guidance": [VendorCategoryGuidance(**g) for g in data.get("vendor_guidance", [])],
-                    "risks_and_contingencies": data.get("risks_and_contingencies", []),
-                    "assumptions": data.get("assumptions", []),
-                    "used_live_ai": True,
-                    "model_used": model,
-                }
+            for attempt_model in candidate_models:
+                try:
+                    response = client.models.generate_content(
+                        model=attempt_model,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            temperature=0.6,
+                        )
+                    )
+
+                    if response and response.text:
+                        data = _clean_json_text(response.text)
+                        return {
+                            "overview": data.get("overview", "Personalized event plan created by FestiWise AI."),
+                            "creative": CreativeConcepts(**data["creative"]),
+                            "day_schedule": [EventScheduleItem(**s) for s in data.get("day_schedule", [])],
+                            "vendor_guidance": [VendorCategoryGuidance(**g) for g in data.get("vendor_guidance", [])],
+                            "risks_and_contingencies": data.get("risks_and_contingencies", []),
+                            "assumptions": data.get("assumptions", []),
+                            "used_live_ai": True,
+                            "model_used": attempt_model,
+                        }
+                except Exception as model_err:
+                    logger.warning(f"Live Gemini API call failed on {attempt_model}: {model_err}. Trying fallback.")
         except Exception as e:
-            logger.warning(f"Live Gemini API call failed: {e}. Falling back to demo generator.")
+            logger.warning(f"Live Gemini setup failed: {e}. Falling back to demo generator.")
 
     # Graceful demo fallback generator
     return _generate_demo_event_blueprint(event_input)
@@ -458,32 +466,40 @@ def generate_plan_rescue_advice(
             }}
             """
 
-            response = client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.5,
-                )
-            )
+            candidate_models = [model]
+            if model != "gemini-3.5-flash-lite":
+                candidate_models.append("gemini-3.5-flash-lite")
 
-            if response and response.text:
-                data = _clean_json_text(response.text)
-                alternatives = [
-                    PlanRescueAlternative(**alt) for alt in data.get("recommended_alternatives", [])
-                ]
-                rec = PlanRescueRecommendation(
-                    disruption_summary=data.get("disruption_summary", "Disruption analysis complete."),
-                    quantitative_impact=budget_impact,
-                    affected_tasks=data.get("affected_tasks", []),
-                    affected_vendors=data.get("affected_vendors", []),
-                    recommended_alternatives=alternatives,
-                    contingency_steps=data.get("contingency_steps", []),
-                    rebalancing_strategy=data.get("rebalancing_strategy", ""),
-                )
-                return rec, True, model
+            for attempt_model in candidate_models:
+                try:
+                    response = client.models.generate_content(
+                        model=attempt_model,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            temperature=0.5,
+                        )
+                    )
+
+                    if response and response.text:
+                        data = _clean_json_text(response.text)
+                        alternatives = [
+                            PlanRescueAlternative(**alt) for alt in data.get("recommended_alternatives", [])
+                        ]
+                        rec = PlanRescueRecommendation(
+                            disruption_summary=data.get("disruption_summary", "Disruption analysis complete."),
+                            quantitative_impact=budget_impact,
+                            affected_tasks=data.get("affected_tasks", []),
+                            affected_vendors=data.get("affected_vendors", []),
+                            recommended_alternatives=alternatives,
+                            contingency_steps=data.get("contingency_steps", []),
+                            rebalancing_strategy=data.get("rebalancing_strategy", ""),
+                        )
+                        return rec, True, attempt_model
+                except Exception as model_err:
+                    logger.warning(f"Plan rescue live API call failed on {attempt_model}: {model_err}. Trying fallback.")
         except Exception as e:
-            logger.warning(f"Plan rescue live API call failed: {e}. Falling back to demo rescue engine.")
+            logger.warning(f"Plan rescue live API setup failed: {e}. Falling back to demo rescue engine.")
 
     # High quality demo rescue fallback
     return _generate_demo_rescue_advice(request, event_data, budget_impact)

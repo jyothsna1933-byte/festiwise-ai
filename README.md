@@ -231,7 +231,7 @@ FestiWise AI requires **zero paid cloud credits** and is specifically engineered
 - [x] **Guest & RSVP Management:** Attendee capacity tracker, dietary requirements, and group seating.
 - [x] **Settings & Diagnostics:** Live Gemini API test tool, model switcher, currency preferences.
 - [x] **Data Persistence:** Local SQLite database with full CRUD and cascade delete.
-- [x] **Automated Test Suite:** 20 passing unit & integration tests.
+- [x] **Automated Test Suite:** 21 passing unit & integration tests.
 
 ---
 

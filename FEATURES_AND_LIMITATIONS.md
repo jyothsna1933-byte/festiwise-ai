@@ -38,6 +38,12 @@
 - **Symptom 3:** Localhost probe socket error `WinError 10013` inside standard sandbox.
   - **Root Cause:** Standard sandbox mode isolates all network connections, including loopback TCP sockets.
   - **Resolution:** Probed with network enabled (`BypassSandbox: true`), which immediately confirmed HTTP 200 on `http://127.0.0.1:8501/_stcore/health`.
+- **Symptom 4:** `ImportError: DLL load failed while importing dtypes: An Application Control policy has blocked this file` (Win32 Error 4551).
+  - **Root Cause:** `pandas 3.1.0` binary wheel contained an unvetted C-extension `dtypes.cp313-win_amd64.pyd` that triggered Windows Defender Application Control (WDAC) code-integrity blocking rule 4551.
+  - **Resolution:** Safely diagnosed via low-level `ctypes.windll.kernel32.LoadLibraryExW` diagnostic. Tested and installed the vetted official release `pandas==2.2.3`, which loaded completely without any security block. Pinned `pandas>=2.2.3,<3.0.0` in `requirements.txt`.
+- **Symptom 5:** Upstream Gemini model deprecations (`gemini-2.5-flash` returning 404).
+  - **Root Cause:** Older preview models are periodically retired by Google AI Studio.
+  - **Resolution:** Updated `services/gemini_service.py` to auto-fallback across candidate models (`[configured_model, "gemini-3.5-flash-lite"]`). Verified live API connectivity with `gemini-3.5-flash-lite`.
 
 ---
 
