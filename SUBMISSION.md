@@ -65,7 +65,7 @@ When real-world disruptions strike (such as sudden venue cancellations, bad weat
 
 ## 4. Verification & Testing Summary
 
-- **Automated Test Results:** **21 passed in 3.66 seconds** via `pytest -v tests`
+- **Automated Test Results:** **26 passed in 4.55 seconds** via `pytest -v tests`
 - **Coverage Areas:**
   - `test_schemas.py`: Valid and invalid input validations, Pydantic type constraints.
   - `test_budget.py`: Initial allocation sums, expense commitment logic, overflow detection, proportional rebalancing.

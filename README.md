@@ -61,7 +61,7 @@ Instead of treating event planning as static forms or disconnected chats, FestiW
 - **Data Validation & Schemas:** [Pydantic v2](https://docs.pydantic.dev/)
 - **Data Persistence:** SQLite 3 with foreign key cascading and JSON serialization
 - **Visual Analytics:** [Plotly Express & Graph Objects](https://plotly.com/python/)
-- **Testing Suite:** [pytest](https://docs.pytest.org/) (21 automated unit & integration tests)
+- **Testing Suite:** [pytest](https://docs.pytest.org/) (26 automated unit & integration tests)
 - **Deployment Platform:** Streamlit Community Cloud (Free-tier, zero GCP credit requirement)
 
 ---
@@ -193,7 +193,7 @@ tests/test_timeline.py::test_generate_baseline_tasks_ordering PASSED
 tests/test_timeline.py::test_calculate_timeline_metrics PASSED
 tests/test_timeline.py::test_validate_day_schedule PASSED
 
-============================= 21 passed in 3.66s ==============================
+============================= 26 passed in 4.55s ==============================
 ```
 
 ---
