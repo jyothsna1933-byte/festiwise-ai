@@ -61,7 +61,7 @@ Instead of treating event planning as static forms or disconnected chats, FestiW
 - **Data Validation & Schemas:** [Pydantic v2](https://docs.pydantic.dev/)
 - **Data Persistence:** SQLite 3 with foreign key cascading and JSON serialization
 - **Visual Analytics:** [Plotly Express & Graph Objects](https://plotly.com/python/)
-- **Testing Suite:** [pytest](https://docs.pytest.org/) (20 automated unit & integration tests)
+- **Testing Suite:** [pytest](https://docs.pytest.org/) (21 automated unit & integration tests)
 - **Deployment Platform:** Streamlit Community Cloud (Free-tier, zero GCP credit requirement)
 
 ---
@@ -163,7 +163,7 @@ Open your browser and navigate to `http://localhost:8501`.
 
 ## 9. How to Run the Automated Test Suite
 
-FestiWise AI includes 20 comprehensive unit and integration tests covering data validation, programmatic budget arithmetic, database persistence, Plan Rescue calculations, and GenAI error recovery:
+FestiWise AI includes 21 comprehensive unit and integration tests covering data validation, programmatic budget arithmetic, database persistence, Plan Rescue calculations, full user lifecycle workflows, and GenAI error recovery:
 
 ```powershell
 pytest -v tests
@@ -182,6 +182,7 @@ tests/test_gemini.py::test_missing_credentials_graceful_status PASSED
 tests/test_gemini.py::test_missing_credentials_fallback_blueprint PASSED
 tests/test_gemini.py::test_api_failure_and_malformed_json_fallback PASSED
 tests/test_gemini.py::test_plan_rescue_fallback_when_credentials_absent PASSED
+tests/test_integration_workflow.py::test_full_user_lifecycle_workflow PASSED
 tests/test_rescue.py::test_compute_rescue_budget_delta_direct_and_guests PASSED
 tests/test_rescue.py::test_evaluate_and_apply_plan_rescue PASSED
 tests/test_schemas.py::test_valid_event_input PASSED
@@ -192,7 +193,7 @@ tests/test_timeline.py::test_generate_baseline_tasks_ordering PASSED
 tests/test_timeline.py::test_calculate_timeline_metrics PASSED
 tests/test_timeline.py::test_validate_day_schedule PASSED
 
-============================= 20 passed in 8.12s ==============================
+============================= 21 passed in 3.66s ==============================
 ```
 
 ---

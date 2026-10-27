@@ -65,7 +65,7 @@ When real-world disruptions strike (such as sudden venue cancellations, bad weat
 
 ## 4. Verification & Testing Summary
 
-- **Automated Test Results:** **20 passed in 8.12 seconds** via `pytest -v tests`
+- **Automated Test Results:** **21 passed in 3.66 seconds** via `pytest -v tests`
 - **Coverage Areas:**
   - `test_schemas.py`: Valid and invalid input validations, Pydantic type constraints.
   - `test_budget.py`: Initial allocation sums, expense commitment logic, overflow detection, proportional rebalancing.
@@ -73,7 +73,9 @@ When real-world disruptions strike (such as sudden venue cancellations, bad weat
   - `test_db.py`: SQLite roundtrips, foreign key cascades, task updates, expense CRUD.
   - `test_rescue.py`: Financial impact formulas, guest surge math, diff generation, revision persistence.
   - `test_gemini.py`: Credential missing checks, graceful demo mode, API 429/malformed error fallback.
-- **Application Startup Verification:** Streamlit v1.66.1 initializes cleanly, renders the custom SaaS celebratory theme, loads the pre-seeded wedding demonstration event, and handles full interactive navigation across all 10 modules.
+  - `test_integration_workflow.py`: Complete user lifecycle covering creation, expenses, tasks, rescue, diff review, and JSON export.
+- **Application Startup Verification:** Streamlit v1.66.1 initializes cleanly, binds to port 8501, and responds with HTTP 200 on `/_stcore/health` probe. The Windows console `cp1252` encoding issue has been permanently resolved.
+- **Deployment & Integration Truthfulness:** Codebase and configuration are fully prepared for free-tier deployment on Streamlit Community Cloud without GCP credits. Live Gemini API calls require the user's free Google AI Studio key, while the built-in demonstration engine powers complete offline testing.
 
 ---
 

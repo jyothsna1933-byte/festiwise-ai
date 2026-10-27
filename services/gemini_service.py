@@ -23,6 +23,21 @@ from models.schemas import (
 logger = logging.getLogger(__name__)
 
 
+def _clean_json_text(text: str) -> Dict[str, Any]:
+    """Clean and parse JSON from model response text, stripping markdown blocks if present."""
+    if not text:
+        raise ValueError("Empty response text from model.")
+    cleaned = text.strip()
+    if cleaned.startswith("```json"):
+        cleaned = cleaned[7:]
+    elif cleaned.startswith("```"):
+        cleaned = cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3]
+    cleaned = cleaned.strip()
+    return json.loads(cleaned)
+
+
 def is_gemini_available() -> Tuple[bool, str]:
     """Check whether Gemini SDK is installed and an API key is present."""
     key = get_gemini_api_key()
@@ -123,7 +138,7 @@ def generate_ai_event_blueprint(
             )
 
             if response and response.text:
-                data = json.loads(response.text)
+                data = _clean_json_text(response.text)
                 return {
                     "overview": data.get("overview", "Personalized event plan created by FestiWise AI."),
                     "creative": CreativeConcepts(**data["creative"]),
@@ -453,7 +468,7 @@ def generate_plan_rescue_advice(
             )
 
             if response and response.text:
-                data = json.loads(response.text)
+                data = _clean_json_text(response.text)
                 alternatives = [
                     PlanRescueAlternative(**alt) for alt in data.get("recommended_alternatives", [])
                 ]

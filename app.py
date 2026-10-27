@@ -7,6 +7,13 @@ Hack2Skill PromptWars | Challenge 5: Celebration & Event Planner
 import sys
 from pathlib import Path
 
+# Ensure UTF-8 output encoding on Windows platforms
+if sys.platform == "win32":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # Add root directory to sys.path
 root_dir = Path(__file__).resolve().parent
 if str(root_dir) not in sys.path:
