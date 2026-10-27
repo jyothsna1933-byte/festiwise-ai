@@ -171,3 +171,17 @@ def test_verify_gemini_connection_invalid_key_stops_early():
         # Should only have attempted once
         assert mock_client.models.generate_content.call_count == 1
 
+
+def test_get_config_val_and_gemini_key():
+    """Verify config retrieval helper behavior across env and defaults."""
+    from config import get_config_val, get_gemini_api_key
+
+    with patch.dict(os.environ, {}, clear=True):
+        assert get_config_val("NON_EXISTENT_VAR", "default_val") == "default_val"
+        assert get_gemini_api_key() == ""
+
+    with patch.dict(os.environ, {"TEST_KEY": "test_val", "GEMINI_API_KEY": "test_gemini_key"}):
+        assert get_config_val("TEST_KEY", "default_val") == "test_val"
+        assert get_gemini_api_key() == "test_gemini_key"
+
+

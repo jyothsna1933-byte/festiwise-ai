@@ -19,12 +19,26 @@ try:
 except ImportError:
     pass
 
+def get_config_val(key: str, default: str = "") -> str:
+    """Retrieve configuration from environment variable, Streamlit secrets, or fallback default."""
+    val = os.getenv(key, "").strip()
+    if val:
+        return val
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and key in st.secrets:
+            return str(st.secrets[key]).strip()
+    except Exception:
+        pass
+    return default
+
+
 # Base directories
 BASE_DIR = Path(__file__).resolve().parent
-DATABASE_PATH = os.getenv("DATABASE_PATH", str(BASE_DIR / "festiwise.db"))
+DATABASE_PATH = get_config_val("DATABASE_PATH", str(BASE_DIR / "festiwise.db"))
 
 # Gemini API Configuration
-DEFAULT_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+DEFAULT_GEMINI_MODEL = get_config_val("GEMINI_MODEL", "gemini-3.8-flash")
 SUPPORTED_GEMINI_MODELS = [
     "gemini-3.8-flash",
     "gemini-3.6-flash",
@@ -49,7 +63,7 @@ CURRENCY_SYMBOLS: Dict[str, str] = {
     "AED": "AED ",
 }
 
-DEFAULT_CURRENCY = os.getenv("DEFAULT_CURRENCY", "INR")
+DEFAULT_CURRENCY = get_config_val("DEFAULT_CURRENCY", "INR")
 
 # Event Categories supported by FestiWise AI
 EVENT_CATEGORIES = [
@@ -129,27 +143,10 @@ def get_gemini_api_key() -> str:
     
     Never prints or logs the key.
     """
-    # 1. Environment variable
-    key = os.getenv("GEMINI_API_KEY", "").strip()
+    key = get_config_val("GEMINI_API_KEY", "")
     if key:
         return key
-    
-    # 2. Check GOOGLE_API_KEY as alternate
-    alt_key = os.getenv("GOOGLE_API_KEY", "").strip()
-    if alt_key:
-        return alt_key
-        
-    # 3. Streamlit secrets if running inside streamlit
-    try:
-        import streamlit as st
-        if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
-            return str(st.secrets["GEMINI_API_KEY"]).strip()
-        if hasattr(st, "secrets") and "GOOGLE_API_KEY" in st.secrets:
-            return str(st.secrets["GOOGLE_API_KEY"]).strip()
-    except Exception:
-        pass
-        
-    return ""
+    return get_config_val("GOOGLE_API_KEY", "")
 
 
 def format_currency(amount: float, currency_code: str = "INR") -> str:
