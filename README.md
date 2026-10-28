@@ -10,6 +10,7 @@
 - **Live Application:** https://festiwise-ai-jyothsna.streamlit.app
 - **Source Code:** https://github.com/jyothsna1933-byte/festiwise-ai
 - **Demo Video:** https://youtu.be/yPTgFBGboo0
+
 Explore the event dashboard, budget planner, timeline and tasks, Creative Studio, guest management, and Plan Rescue Mode.
 
 *Note: The deployed application uses Streamlit Community Cloud. Data persistence and AI availability may be affected by the hosting environment and API availability.*
